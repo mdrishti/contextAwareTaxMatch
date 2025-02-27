@@ -72,5 +72,5 @@ def train_model(triplet_csv, lineage_csv, num_epochs=10, batch_size=16, lr=0.001
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss/len(dataloader):.4f}")
 
 #run Training
-train_model("triplets.csv", "lineage.csv", num_epochs=10, batch_size=16)
+train_model("data/triplets.csv", "data/lineage.csv", num_epochs=10, batch_size=16)
 

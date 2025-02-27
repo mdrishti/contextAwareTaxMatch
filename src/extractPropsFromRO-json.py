@@ -27,7 +27,7 @@ for edge in edges:
 for relation, inverse in inverse_relations.items():
     print(f"{relation}, {inverse}")
 
-outputFile = "relations.txt"
+outputFile = "data/relations.txt"
 with open(outputFile, mode='w', newline='') as file:
     writer = csv.writer(file, delimiter='\t')
     for relation, inverse in inverse_relations.items():
