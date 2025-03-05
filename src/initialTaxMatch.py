@@ -15,14 +15,14 @@ wd_sparql_df = pd.read_csv(wd_sparql_file, sep=",", dtype=str)
 
 # 1-rename columns (Skipping the first row)
 prefixes = {
-    2: "EOL:", 3: "GBIF:", 4: "NCBI:", 5: "OTT:", 6: "ITIS:",
-    7: "IRMNG:", 8: "COL:", 9: "NBN:", 10: "WORMS:", 11: "BOLD:",
-    12: "PLAZI:", 14: "msw3:", 15: "INAT_TAXON:", 16: "EPPO:"
+    1: "EOL:", 2: "GBIF:", 3: "NCBI:", 4: "OTT:", 5: "ITIS:",
+    6: "IRMNG:", 7: "COL:", 8: "NBN:", 9: "WORMS:", 10: "BOLD:",
+    11: "PLAZI:", 12: "APNI:",  13: "msw3:", 14: "INAT_TAXON:", 15: "EPPO:"
 }
 
 for col, prefix in prefixes.items():
     if col < len(wd_sparql_df.columns):
-        wd_sparql_df.iloc[1:, col] = prefix + wd_sparql_df.iloc[1:, col]
+        wd_sparql_df.iloc[0:, col] = prefix + wd_sparql_df.iloc[0:, col]
 
 # 1-replace URL patterns
 wd_sparql_df.replace({"http://www.wikidata.org/entity/": "Wikidata:", '"': ''}, regex=True, inplace=True)
@@ -57,8 +57,7 @@ verbatim_globi_df = verbatim_globi_df.drop_duplicates()
 #verbatim_df.to_csv(out_verbatim_file, sep="\t", index=False, header=False)
 
 
-# 3- merge wd_sparql_temp1 with verbatim interactions
-#id_map = {row[i]: row[len(row) - 1] if !(row[i].isna()) for _, row in wd_sparql_df.iterrows() for i in range(len(row) - 1)}
+# 3-merge wd_sparql_temp1 with verbatim interactions
 id_map = {row[i]: row[len(row) - 1] for _, row in wd_sparql_df.iterrows() for i in range(len(row) - 1) if pd.notna(row[i])}
 
 
@@ -68,8 +67,7 @@ with open(final_output, 'w') as out:
         key, value = row[0], row[1]
         if key != "":
             if key in id_map.keys():
-                print(key)
-                mapped_id, mapped_value = id_map[key]
+                mapped_id, mapped_value = key, id_map[key]
                 print(mapped_id," ",mapped_value)
                 match_status = "NAME-MATCH-YES" if mapped_value.lower() == value.lower() else "NAME-MATCH-NO"
                 out.write(f"{key}\t{value}\t{mapped_id}\t{mapped_value}\t{match_status}\n")
@@ -78,9 +76,3 @@ with open(final_output, 'w') as out:
         else:
             out.write(f"{key}\t{value}\t\tID-NOT-PRESENT\n")
 
-
-for _, row in verbatim_globi_df.iterrows():
-    key, value = row[0], row[1]
-    if key != "":
-        if key in id_map.keys():
-            print(key)
