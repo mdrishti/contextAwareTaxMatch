@@ -65,7 +65,7 @@ final_output = "wd_globi_source_target_names.txt"
 with open(final_output, 'w') as out:
     for _, row in verbatim_globi_df.iterrows():
         key, value = row[0], row[1]
-        if key != "":
+        if pd.notna(key):
             if key in id_map.keys():
                 mapped_id, mapped_value = key, id_map[key]
                 print(mapped_id," ",mapped_value)
