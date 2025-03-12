@@ -206,7 +206,8 @@ start=time.time() #sanity check for time
 #matched_df = verbatim_globi_df.loc[verbatim_globi_df["Match_Status"] == "ID-NOT-FOUND"].apply(process_row, axis=1) # separate df 
 mask = verbatim_globi_df["Match_Status"] == "ID-NOT-FOUND" 
 verbatim_globi_df.loc[mask] = verbatim_globi_df.loc[mask].apply(process_row, axis=1).apply(pd.Series) #same df
-
+mask = verbatim_globi_df["Match_Status"] == "ID-NOT-PRESENT" 
+verbatim_globi_df.loc[mask] = verbatim_globi_df.loc[mask].apply(process_row, axis=1).apply(pd.Series) #same df
 end=time.time() - start
 print(end)
 matched_df.to_csv(outputFileX, index=False)
