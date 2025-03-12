@@ -2,26 +2,21 @@ import pandas as pd
 import gzip
 import sys
 import argparse
+from itertools import zip_longest
+import time 
 
 sys.path.append('./functions')  # Add the 'src' directory to the sys.path
 import dataProcessing as dpx
 
 predefined_ranks = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
 
-
 # function to extract ranks into separate columns
 def extract_ranks(structure, values):
     # split structure and values into lists
     rank_list = [r.strip() for r in structure.split("|")]
     value_list = [v.strip() for v in values.split("|")]
-    #print(rank_list)
-    #print(value_list)
-    # create dict with rank-value pairs
-    rank_dict = dict(zip(rank_list, value_list))
-    print(predefined_ranks)
+    rank_dict = dict(zip_longest(rank_list, value_list, fillvalue=""))
     return {rank: rank_dict.get(rank, "") for rank in predefined_ranks}
-
-
 
 # function to split taxon paths and rank names
 def safe_extract_ranks(row):
@@ -29,7 +24,6 @@ def safe_extract_ranks(row):
         return extract_ranks(row["TaxonRankName"], row["TaxonPathName"])
     else:
         return pd.Series({rank: pd.NA for rank in predefined_ranks})
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument('wd_sparql_file', type=str, help="Enter the file which contains wikidata mappings to other databases")
@@ -42,8 +36,14 @@ wd_sparql_file = args.wd_sparql_file
 verbatim_file = args.verbatim_file
 outputFileX = args.output_file
 wd_lineage_file = args.wd_lineage_aligned_file
-wd_repeats_lineage = args.wdLineageRepeats_file
+wd_repeats_file = args.wdLineageRepeats_file
 
+
+
+wd_sparql_file = "/home/drishti/Documents/Projects/DBGI/gitReposMine/wikidata_taxonomy_mapping/all_wd_eol_ncbi_gbif_andOthers_mapping_SPARQL_20250303.txt"
+verbatim_file = "/home/drishti/Documents/Projects/DBGI/globi/newVersion_20250113/verbatim-interactions.tsv.gz"
+wd_lineage_file = "/home/drishti/Documents/Projects/DBGI/gitReposMine/wikidata_taxonomy_mapping/all_wd_eol_ncbi_gbif_andOthers_mapping_SPARQL_20250305_lineage_filtered_aligned.txt.gz"
+wd_repeats_file = "/home/drishti/Documents/Projects/DBGI/gitReposMine/wikidata_taxonomy_mapping/repeats_in_sparql_tests_names_rows.txt"
 
 # 1-read and transform the CSV file
 wd_sparql_df = pd.read_csv(wd_sparql_file, sep=",", dtype=str)
@@ -63,14 +63,20 @@ for col, prefix in prefixes.items():
 wd_sparql_df.replace({"http://www.wikidata.org/entity/": "Wikidata:", '"': ''}, regex=True, inplace=True)
 
 # 1-map of ids
-id_map = {row[i]: row[len(row) - 1] for _, row in wd_sparql_df.iterrows() for i in range(len(row) - 1) if pd.notna(row[i])}
+cols_to_map = wd_sparql_df.columns[:-1]  # All columns except the last one
+id_map = (
+    wd_sparql_df.melt(id_vars=wd_sparql_df.columns[-1], value_vars=cols_to_map, value_name="key")
+    .dropna(subset=["key"])
+    .set_index("key")[wd_sparql_df.columns[-1]]
+    .to_dict()
+)
+
 
 # 2- process the gzipped verbatim interactions file
 verbatim_globi_df = pd.read_csv(verbatim_file, usecols=['sourceTaxonId','sourceTaxonName','sourceTaxonPathNames','sourceTaxonPathRankNames'], sep="\t", dtype=str) #read source
 verbatim_globi_df.columns = ["TaxonId", "TaxonName","TaxonPathName","TaxonRankName"]
 df1 = pd.read_csv(verbatim_file, usecols=['targetTaxonId','targetTaxonName','targetTaxonPathNames','targetTaxonPathRankNames'], sep="\t", dtype=str) #read target
 df1.columns = ["TaxonId", "TaxonName","TaxonPathName","TaxonRankName"]
-
 verbatim_globi_df = pd.concat([verbatim_globi_df, df1], axis=0) #concat source and target
 
 # 2- replace placeholders and sort -u
@@ -92,24 +98,24 @@ verbatim_globi_df.replace({
 }, regex=True, inplace=True)
 verbatim_globi_df = verbatim_globi_df.drop_duplicates()
 
-
+# 2 - add ranks to the df
 expanded_verbatim_globi_df = verbatim_globi_df.apply(safe_extract_ranks, axis=1, result_type="expand")
 verbatim_globi_df = pd.concat([verbatim_globi_df, expanded_verbatim_globi_df], axis=1)
 #verbatrim_globi_df = pd.concat([verbatrim_globi_df, expanded_verbatim_globi_df], axis=1)
 #verbatim_df.to_csv(out_verbatim_file, sep="\t", index=False, header=False)
 
-
 # 3- first layer of extractions using wd_sparql_df and verbatim interactions. Assign NAME-MATCH-YES/NO, ID-NOT-FOUND, ID-NOT-PRESENT
-expanded_verbatim_globi_df = dpx.initialTaxMatchDfX(verbatim_globi_df, id_map)
+verbatim_globi_df = dpx.initialTaxMatchDfY(verbatim_globi_df, id_map)
 
 
-# 4- second layer of extraction
+# 4- second layer of extraction #########################
 # 4- process wd lineage file
 wd_lineage_df = pd.read_csv(wd_lineage_file, sep=",", dtype=str)
 wd_lineage_df["WdID"] = wd_lineage_df["WdID"].str.replace("http://www.wikidata.org/entity/", "Wikidata:", regex=False)
 wd_name_to_id_set = set(wd_lineage_df["WdName"])
 
 # 4- process repeated taxonomic names in the lineage
+wd_repeats_lineage = pd.read_csv(wd_repeats_file)
 wd_repeats_lineage = wd_repeats_lineage.fillna("")
 wd_repeats_lineage["WdID"] = wd_repeats_lineage["WdID"].str.replace("http://www.wikidata.org/entity/", "Wikidata:", regex=False)
 wd_lineage_set = set(wd_repeats_lineage["WdName"])
@@ -176,7 +182,7 @@ def process_row(row):
             row["kingdom"] = tempVar[5]
         else:
             best_wd_id = row["TaxonId"]
-        status = "duplicate" if tempVar else "mismatch"
+        status = "ID-MATCHED-BY-NAME-DUPL-duplicate" if tempVar else "ID-MATCHED-BY-NAME-DUPL-mismatch"
     elif taxon_name in wd_name_to_id_set:
         tempVar = wd_name_to_id.get(taxon_name, (None,)) #retrieve full row-Value followed by index-based alignment
         best_wd_id = tempVar[0]
@@ -186,18 +192,21 @@ def process_row(row):
         row["phylum"] = tempVar[4]
         row["kingdom"] = tempVar[5]
         #best_wd_id = wd_name_to_id[(taxon_name,)]
-        status = "direct"
+        status = "ID-MATCHED-BY-NAME-direct"
     else:
         best_wd_id = row["TaxonId"]
-        status = "not found"
+        status = row["Match_Status"]
     row["TaxonId"] = best_wd_id
-    row["Status"] = status
+    row["Match_Status"] = status
     return row
 
 #4- Match as many ID-NOT-FOUND as possible
 start=time.time() #sanity check for time
-#matched_df_part1 = expanded_verbatim_globi_df.loc[expanded_verbatim_globi_df["Match_Status"] == "ID-NOT-FOUND"].iloc[1:100].apply(process_row, axis=1) # snaity check for few rows
-matched_df = expanded_verbatim_globi_df.loc[expanded_verbatim_globi_df["Match_Status"] == "ID-NOT-FOUND"].apply(process_row, axis=1)
+#matched_df_part1 = verbatim_globi_df.loc[verbatim_globi_df["Match_Status"] == "ID-NOT-FOUND"].iloc[1:100].apply(process_row, axis=1) # snaity check for few rows
+#matched_df = verbatim_globi_df.loc[verbatim_globi_df["Match_Status"] == "ID-NOT-FOUND"].apply(process_row, axis=1) # separate df 
+mask = verbatim_globi_df["Match_Status"] == "ID-NOT-FOUND" 
+verbatim_globi_df.loc[mask] = verbatim_globi_df.loc[mask].apply(process_row, axis=1).apply(pd.Series) #same df
+
 end=time.time() - start
 print(end)
 matched_df.to_csv(outputFileX, index=False)
