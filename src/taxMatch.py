@@ -39,12 +39,6 @@ wd_lineage_file = args.wd_lineage_aligned_file
 wd_repeats_file = args.wdLineageRepeats_file
 
 
-
-wd_sparql_file = "/home/drishti/Documents/Projects/DBGI/gitReposMine/wikidata_taxonomy_mapping/all_wd_eol_ncbi_gbif_andOthers_mapping_SPARQL_20250303.txt"
-verbatim_file = "/home/drishti/Documents/Projects/DBGI/globi/newVersion_20250113/verbatim-interactions.tsv.gz"
-wd_lineage_file = "/home/drishti/Documents/Projects/DBGI/gitReposMine/wikidata_taxonomy_mapping/all_wd_eol_ncbi_gbif_andOthers_mapping_SPARQL_20250305_lineage_filtered_aligned.txt.gz"
-wd_repeats_file = "/home/drishti/Documents/Projects/DBGI/gitReposMine/wikidata_taxonomy_mapping/repeats_in_sparql_tests_names_rows.txt"
-
 # 1-read and transform the CSV file
 wd_sparql_df = pd.read_csv(wd_sparql_file, sep=",", dtype=str)
 
@@ -97,15 +91,18 @@ verbatim_globi_df.replace({
     "gbif:": "GBIF:",
 }, regex=True, inplace=True)
 verbatim_globi_df = verbatim_globi_df.drop_duplicates()
+verbatim_globi_df_backup= verbatim_globi_df.copy()
 
 # 2 - add ranks to the df
 expanded_verbatim_globi_df = verbatim_globi_df.apply(safe_extract_ranks, axis=1, result_type="expand")
 verbatim_globi_df = pd.concat([verbatim_globi_df, expanded_verbatim_globi_df], axis=1)
+verbatim_globi_df_backup1= verbatim_globi_df.copy()
 #verbatrim_globi_df = pd.concat([verbatrim_globi_df, expanded_verbatim_globi_df], axis=1)
 #verbatim_df.to_csv(out_verbatim_file, sep="\t", index=False, header=False)
 
 # 3- first layer of extractions using wd_sparql_df and verbatim interactions. Assign NAME-MATCH-YES/NO, ID-NOT-FOUND, ID-NOT-PRESENT
 verbatim_globi_df = dpx.initialTaxMatchDfY(verbatim_globi_df, id_map)
+verbatim_globi_df_backup2= verbatim_globi_df.copy()
 
 
 # 4- second layer of extraction #########################
@@ -206,8 +203,10 @@ start=time.time() #sanity check for time
 #matched_df = verbatim_globi_df.loc[verbatim_globi_df["Match_Status"] == "ID-NOT-FOUND"].apply(process_row, axis=1) # separate df 
 mask = verbatim_globi_df["Match_Status"] == "ID-NOT-FOUND" 
 verbatim_globi_df.loc[mask] = verbatim_globi_df.loc[mask].apply(process_row, axis=1).apply(pd.Series) #same df
+verbatim_globi_df_backup3= verbatim_globi_df.copy()
 mask = verbatim_globi_df["Match_Status"] == "ID-NOT-PRESENT" 
 verbatim_globi_df.loc[mask] = verbatim_globi_df.loc[mask].apply(process_row, axis=1).apply(pd.Series) #same df
+verbatim_globi_df_backup4= verbatim_globi_df.copy()
 end=time.time() - start
 print(end)
 matched_df.to_csv(outputFileX, index=False)
