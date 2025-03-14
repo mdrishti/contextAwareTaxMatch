@@ -42,9 +42,10 @@ def initialTaxMatchDfX(verbatim_globi_df, id_map):
     return verbatim_globi_df
 
 
-def initialTaxMatchDfY(verbatim_globi_df, id_map):
+def initialTaxMatchDfY(verbatim_globi_df, id_map, id_map_WD):
     # map TaxonID to corresponding TaxonName from id_map (returns NaN if not found)
     verbatim_globi_df["Mapped_Value"] = verbatim_globi_df.iloc[:, 0].map(id_map)
+    verbatim_globi_df["Mapped_ID_WD"] = verbatim_globi_df.iloc[:, 0].map(id_map_WD)
     # Assign Mapped_ID (same as TaxonID if found in id_map, else None)
     verbatim_globi_df["Mapped_ID"] = verbatim_globi_df.iloc[:, 0].where(
         verbatim_globi_df["Mapped_Value"].notna()

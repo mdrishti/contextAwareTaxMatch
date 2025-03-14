@@ -57,11 +57,18 @@ for col, prefix in prefixes.items():
 wd_sparql_df.replace({"http://www.wikidata.org/entity/": "Wikidata:", '"': ''}, regex=True, inplace=True)
 
 # 1-map of ids
-cols_to_map = wd_sparql_df.columns[:-1]  # All columns except the last one
+cols_to_map = wd_sparql_df.columns[:-1]  # all columns except the last one
 id_map = (
     wd_sparql_df.melt(id_vars=wd_sparql_df.columns[-1], value_vars=cols_to_map, value_name="key")
     .dropna(subset=["key"])
     .set_index("key")[wd_sparql_df.columns[-1]]
+    .to_dict()
+)
+cols_to_map_WD = wd_sparql_df.columns[1:-1]  # all columns except the first and last one
+id_map_WD = (
+    wd_sparql_df.melt(id_vars=wd_sparql_df.columns[0], value_vars=cols_to_map, value_name="key")
+    .dropna(subset=["key"])
+    .set_index("key")[wd_sparql_df.columns[0]]
     .to_dict()
 )
 
@@ -101,7 +108,7 @@ verbatim_globi_df_backup1= verbatim_globi_df.copy()
 #verbatim_df.to_csv(out_verbatim_file, sep="\t", index=False, header=False)
 
 # 3- first layer of extractions using wd_sparql_df and verbatim interactions. Assign NAME-MATCH-YES/NO, ID-NOT-FOUND, ID-NOT-PRESENT
-verbatim_globi_df = dpx.initialTaxMatchDfY(verbatim_globi_df, id_map)
+verbatim_globi_df = dpx.initialTaxMatchDfY(verbatim_globi_df, id_map, id_map_WD)
 verbatim_globi_df_backup2= verbatim_globi_df.copy()
 
 
@@ -178,7 +185,8 @@ def process_row(row):
             row["phylum"] = tempVar[4]
             row["kingdom"] = tempVar[5]
         else:
-            best_wd_id = row["TaxonId"]
+            best_wd_id = None
+            #best_wd_id = row["TaxonId"]
         status = "ID-MATCHED-BY-NAME-DUPL-duplicate" if tempVar else "ID-MATCHED-BY-NAME-DUPL-mismatch"
     elif taxon_name in wd_name_to_id_set:
         tempVar = wd_name_to_id.get(taxon_name, (None,)) #retrieve full row-Value followed by index-based alignment
@@ -191,9 +199,10 @@ def process_row(row):
         #best_wd_id = wd_name_to_id[(taxon_name,)]
         status = "ID-MATCHED-BY-NAME-direct"
     else:
-        best_wd_id = row["TaxonId"]
+        best_wd_id = None
         status = row["Match_Status"]
-    row["TaxonId"] = best_wd_id
+        #best_wd_id = row["TaxonId"]
+    row["Mapped_ID_WD"] = best_wd_id
     row["Match_Status"] = status
     return row
 
@@ -209,7 +218,7 @@ verbatim_globi_df.loc[mask] = verbatim_globi_df.loc[mask].apply(process_row, axi
 verbatim_globi_df_backup4= verbatim_globi_df.copy()
 end=time.time() - start
 print(end)
-matched_df.to_csv(outputFileX, index=False)
+verbatim_globi_df.to_csv(outputFileX, index=False)
 
 
 
