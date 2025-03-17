@@ -162,10 +162,8 @@ def get_best_wikidata_id(taxon_name, family, tax_class, order, phylum, kingdom):
 #4-function to process the rows for "ID-NOT-FOUND" cases by checking through three cases -repeats elif direct match elif still not found
 def process_row(row):
     taxon_name = row["TaxonName"]
-    #if (taxon_name,) in wd_lineage_dict:
     possible_keys = [k for k in wd_lineage_dict.keys() if k[0] == taxon_name]
     if possible_keys:
-        #best_wd_ids = wd_name_to_id[possible_keys[0]]  # Or apply ranking logic
         family = row.get("family", "")
         family = family if pd.notna(family) else ""
         tax_class = row.get("class", "")
@@ -178,15 +176,18 @@ def process_row(row):
         kingdom = kingdom if pd.notna(kingdom) else ""
         tempVar, tempVarX = get_best_wikidata_id(taxon_name, family, tax_class, order, phylum, kingdom) # return both key and value - key (WdName, ranks...) is first, value (WdID) is later
         if tempVar:
-            best_wd_id = tempVarX
+            if type(tempVarX) is list:
+                best_wd_id = tempVarX[0]
+            else:
+                best_wd_id = tempVarX
             row["family"] = tempVar[1]
             row["class"] = tempVar[2]
             row["order"] = tempVar[3]
             row["phylum"] = tempVar[4]
             row["kingdom"] = tempVar[5]
+            print(best_wd_id)
         else:
             best_wd_id = None
-            #best_wd_id = row["TaxonId"]
         status = "ID-MATCHED-BY-NAME-DUPL-duplicate" if tempVar else "ID-MATCHED-BY-NAME-DUPL-mismatch"
     elif taxon_name in wd_name_to_id_set:
         tempVar = wd_name_to_id.get(taxon_name, (None,)) #retrieve full row-Value followed by index-based alignment
@@ -196,12 +197,10 @@ def process_row(row):
         row["order"] = tempVar[3]
         row["phylum"] = tempVar[4]
         row["kingdom"] = tempVar[5]
-        #best_wd_id = wd_name_to_id[(taxon_name,)]
         status = "ID-MATCHED-BY-NAME-direct"
     else:
         best_wd_id = None
         status = row["Match_Status"]
-        #best_wd_id = row["TaxonId"]
     row["Mapped_ID_WD"] = best_wd_id
     row["Match_Status"] = status
     return row
