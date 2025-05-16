@@ -66,3 +66,26 @@ def initialTaxMatchDfY(verbatim_globi_df, id_map, id_map_WD):
     )
     return verbatim_globi_df
 
+def initialTaxMatchDfZ(verbatim_globi_df, id_map, id_map_WD):
+    # create stripped versions of the relevant columns (TaxonID and TaxonName)
+    taxon_id = verbatim_globi_df.iloc[:, 0].astype(str).str.strip()
+    taxon_name = verbatim_globi_df.iloc[:, 1].astype(str).str.strip()
+    # map TaxonID to corresponding TaxonName from id_map (returns NaN if not found)
+    verbatim_globi_df["Mapped_Value"] = taxon_id.map(id_map)
+    verbatim_globi_df["Mapped_ID_WD"] = taxon_id.map(id_map_WD)
+    # Assign Mapped_ID (same as TaxonID if found in id_map, else None)
+    verbatim_globi_df["Mapped_ID"] = taxon_id.where(verbatim_globi_df["Mapped_Value"].notna())
+    # compare TaxonName with mapped value (case insensitive)
+    verbatim_globi_df["Match_Status"] = (
+        verbatim_globi_df["Mapped_Value"].str.lower() == taxon_name.str.lower()
+    ).map({True: "NAME-MATCH-YES", False: "NAME-MATCH-NO"})
+    # handle cases where TaxonID is missing in id_map
+    verbatim_globi_df["Match_Status"] = verbatim_globi_df["Match_Status"].where(
+        verbatim_globi_df["Mapped_Value"].notna(), "ID-NOT-FOUND"
+    )
+    # handle cases where TaxonID is NA or empty
+    verbatim_globi_df["Match_Status"] = verbatim_globi_df["Match_Status"].where(
+        taxon_id.notna() & (taxon_id != ""), "ID-NOT-PRESENT"
+    )
+    return verbatim_globi_df
+

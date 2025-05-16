@@ -1,9 +1,14 @@
 import pandas as pd
 import gzip
 import sys
+import os
 import argparse
+import configparser
 from itertools import zip_longest
 import time 
+import csv
+import re
+from pathlib import Path
 
 sys.path.append('./functions')  # Add the 'src' directory to the sys.path
 import dataProcessing as dpx
@@ -25,18 +30,41 @@ def safe_extract_ranks(row):
     else:
         return pd.Series({rank: pd.NA for rank in predefined_ranks})
 
-parser = argparse.ArgumentParser()
-parser.add_argument('wd_sparql_file', type=str, help="Enter the file which contains wikidata mappings to other databases")
-parser.add_argument('verbatim_file', type=str, help="Enter the file which contains verbatim interactions for GloBI")
-parser.add_argument('wd_lineage_aligned_file', type=str, help="Enter the wd lineage file")
-parser.add_argument('output_file', type=str, help="Enter the file to store the taxonomy matches")
-parser.add_argument('wdLineageRepeats_file', type=str, help="Enter the file having taxonomic names which are repeated in the wd lineage file")
-args = parser.parse_args()
-wd_sparql_file = args.wd_sparql_file
-verbatim_file = args.verbatim_file
-outputFileX = args.output_file
-wd_lineage_file = args.wd_lineage_aligned_file
-wd_repeats_file = args.wdLineageRepeats_file
+# clean files with abnormal ending of quotes - only use if absolutely necessary
+def clean_quotes_from_file(input_path, output_path):
+    with open(input_path, 'r', encoding='iso-8859-1') as infile, open(output_path, 'w', encoding='utf-8') as outfile:
+        for line in infile:
+            # Count quotes in the line
+            quote_count = line.count('"')
+            if quote_count % 2 != 0:
+                # Remove all double quotes if unbalanced
+                line = line.replace('"', '')
+            outfile.write(line)
+
+
+configFile = "config.txt"
+if os.path.exists(configFile):       #if config file is available
+        config = configparser.ConfigParser()
+        config.read(configFile)
+        wd_sparql_file = config.get('input tsv files', 'wd_sparql_file')
+        verbatim_file = config.get('input tsv files', 'verbatim_file')
+        outputFileX = config.get('input tsv files', 'output_file')
+        wd_lineage_file = config.get('input tsv files', 'wd_lineage_file')
+        wd_repeats_file = config.get('input tsv files', 'wd_repeats_file')
+else:                               #else use command line arguments
+        # Create the argument parser
+        parser = argparse.ArgumentParser()
+        parser.add_argument('wd_sparql_file', type=str, help="Enter the file which contains wikidata mappings to other databases")
+        parser.add_argument('verbatim_file', type=str, help="Enter the file which contains verbatim interactions for GloBI")
+        parser.add_argument('wd_lineage_aligned_file', type=str, help="Enter the wd lineage file")
+        parser.add_argument('output_file', type=str, help="Enter the file to store the taxonomy matches")
+        parser.add_argument('wdLineageRepeats_file', type=str, help="Enter the file having taxonomic names which are repeated in the wd lineage file")
+        args = parser.parse_args()
+        wd_sparql_file = args.wd_sparql_file
+        verbatim_file = args.verbatim_file
+        outputFileX = args.output_file
+        wd_lineage_file = args.wd_lineage_aligned_file
+        wd_repeats_file = args.wdLineageRepeats_file
 
 
 # 1-read and transform the CSV file
@@ -72,13 +100,42 @@ id_map_WD = (
     .to_dict()
 )
 
-
+#verbatim_file = "verbatim_cleaned.tsv"
 # 2- process the gzipped verbatim interactions file
-verbatim_globi_df = pd.read_csv(verbatim_file, usecols=['sourceTaxonId','sourceTaxonName','sourceTaxonPathNames','sourceTaxonPathRankNames'], sep="\t", dtype=str) #read source
-verbatim_globi_df.columns = ["TaxonId", "TaxonName","TaxonPathName","TaxonRankName"]
-df1 = pd.read_csv(verbatim_file, usecols=['targetTaxonId','targetTaxonName','targetTaxonPathNames','targetTaxonPathRankNames'], sep="\t", dtype=str) #read target
+#verbatim_globi_dfX = pd.read_csv(verbatim_file, usecols=['sourceTaxonId','sourceTaxonName','sourceTaxonPathNames','sourceTaxonPathRankNames'], sep="\t", dtype=str) #read source
+verbatim_globi_dfX = pd.read_csv(
+    verbatim_file,
+    usecols=['sourceTaxonId','sourceTaxonName','sourceTaxonPathNames','sourceTaxonPathRankNames'],
+    sep="\t",
+    lineterminator = "\n",
+    dtype=str,
+    quoting=3,  #csv.QUOTE_NONE
+    encoding= "iso-8859-1",
+#    quotechar='"',
+    escapechar='\\'
+)
+verbatim_globi_dfX.columns = ["TaxonId", "TaxonName","TaxonPathName","TaxonRankName"]
+
+#df1X = pd.read_csv(verbatim_file, usecols=['targetTaxonId','targetTaxonName','targetTaxonPathNames','targetTaxonPathRankNames'], sep="\t", dtype=str) #read target
+df1 = pd.read_csv(
+    verbatim_file,
+    usecols=['targetTaxonId','targetTaxonName','targetTaxonPathNames','targetTaxonPathRankNames'],
+    sep="\t",
+    lineterminator = "\n",
+    dtype=str,
+    quoting=3,  # 3 means csv.QUOTE_NONE
+    encoding= "iso-8859-1",
+#    quotechar='"',
+    escapechar='\\'  # optional, helps if quotes are escaped
+)
 df1.columns = ["TaxonId", "TaxonName","TaxonPathName","TaxonRankName"]
-verbatim_globi_df = pd.concat([verbatim_globi_df, df1], axis=0) #concat source and target
+#df1X.columns = ["TaxonId", "TaxonName","TaxonPathName","TaxonRankName"]
+verbatim_globi_df = pd.concat([verbatim_globi_dfX, df1], axis=0) #concat source and target
+verbatim_globi_df.reset_index(drop=True, inplace=True)
+
+
+
+
 
 # 2- replace placeholders and sort -u
 verbatim_globi_df.replace({
@@ -108,7 +165,7 @@ verbatim_globi_df_backup1= verbatim_globi_df.copy()
 #verbatim_df.to_csv(out_verbatim_file, sep="\t", index=False, header=False)
 
 # 3- first layer of extractions using wd_sparql_df and verbatim interactions. Assign NAME-MATCH-YES/NO, ID-NOT-FOUND, ID-NOT-PRESENT
-verbatim_globi_df = dpx.initialTaxMatchDfY(verbatim_globi_df, id_map, id_map_WD)
+verbatim_globi_df = dpx.initialTaxMatchDfZ(verbatim_globi_df, id_map, id_map_WD)
 verbatim_globi_df_backup2= verbatim_globi_df.copy()
 
 
@@ -161,7 +218,10 @@ def get_best_wikidata_id(taxon_name, family, tax_class, order, phylum, kingdom):
 
 #4-function to process the rows for "ID-NOT-FOUND" cases by checking through three cases -repeats elif direct match elif still not found
 def process_row(row):
-    taxon_name = row["TaxonName"]
+    if pd.notna(row["TaxonName"]):
+        taxon_name = row["TaxonName"].strip()
+    else:
+        taxon_name = row["TaxonName"]
     possible_keys = [k for k in wd_lineage_dict.keys() if k[0] == taxon_name]
     if possible_keys:
         family = row.get("family", "")
@@ -174,7 +234,7 @@ def process_row(row):
         phylum = phylum if pd.notna(phylum) else ""
         kingdom = row.get("kingdom", "")
         kingdom = kingdom if pd.notna(kingdom) else ""
-        tempVar, tempVarX = get_best_wikidata_id(taxon_name, family, tax_class, order, phylum, kingdom) # return both key and value - key (WdName, ranks...) is first, value (WdID) is later
+        tempVar, tempVarX = get_best_wikidata_id(taxon_name, family, tax_class, order, phylum, kingdom) # return both key and value - key (WdName, ranks...) is first.
         if tempVar:
             if type(tempVarX) is list:
                 best_wd_id = tempVarX[0]
